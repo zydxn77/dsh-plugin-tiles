@@ -449,12 +449,14 @@ check('标题栏只摆 9 块，其余收进抽屉', () => {
   const all = tiles(tree)
   eq(all.length, mod.__test.INLINE_TILES, `最多 ${mod.__test.INLINE_TILES} 块`)
   eq(mod.__test.INLINE_TILES, 9, '他定的是 9 个')
-  const more = findFirst(tree, (n) => n.type === 'button' && n.children && String(n.children[0]).startsWith('▾'))
+  const more = findFirst(tree, (n) => n.type === 'button' && n.props && n.props['data-more'] === '1')
   eq(more.length, 1, '应当有展开键（▾）')
-  // 2026-11-03 他说「把这个做成这个」：`+N` 换成小三角。
-  // 后来又说「别人不知道什么意思」→ 有收起的东西时显示「▾11」
-  eq(more[0].children[0], `▾${20 - 9}`, '三角后面跟隐藏条数')
-  ok(String(more[0].props.title).includes(String(20 - 9)), `条数也要在 title 里：${more[0].props.title}`)
+  // 按钮上是三角（内联 SVG），不再显示条数 —— 2026-11-03 他问「这个 2 字是什么」，
+  // 看不懂的数字就是噪声，条数挪进 title
+  const glyph = more[0].children[0]
+  eq(glyph && glyph.type, 'svg', '按钮里应当是一个 svg 三角')
+  eq(String(more[0].children[0].children[0].children[0]).includes('▾'), false, '不该再有文字')
+  ok(String(more[0].props.title).includes(String(20 - 9)), `条数要在 title 里：${more[0].props.title}`)
 })
 
 check('点 +N 打开抽屉：全部插件都列出来，一行一个', () => {
@@ -469,7 +471,7 @@ check('点 +N 打开抽屉：全部插件都列出来，一行一个', () => {
     self: false,
   }))
   const tree = render({ __testList: many })
-  const more = findFirst(tree, (n) => n.type === 'button' && n.children && String(n.children[0]).startsWith('▾'))
+  const more = findFirst(tree, (n) => n.type === 'button' && n.props && n.props['data-more'] === '1')
   eq(more.length, 1, '前提：有 +N')
   // 点开它 → 重渲染（不重置 hooks，state 留住）
   more[0].props.onClick()
@@ -620,7 +622,7 @@ function manyPlugins(n) {
 check('抽屉里有两个滑块：大小 / 长短，值跟着当前尺寸', () => {
   win.localStorage.setItem(mod.__test.LS_VIEW, JSON.stringify({ size: 30, width: 44 }))
   const tree = render({ __testList: manyPlugins(12) })
-  const more = findFirst(tree, (n) => n.type === 'button' && n.children && String(n.children[0]).startsWith('▾'))
+  const more = findFirst(tree, (n) => n.type === 'button' && n.props && n.props['data-more'] === '1')
   eq(more.length, 1, '前提：有 +N')
   more[0].props.onClick()
   const opened = rerender()
@@ -641,7 +643,7 @@ check('抽屉里有两个滑块：大小 / 长短，值跟着当前尺寸', () =
 check('改大小会写进 localStorage（下次打开还是这个尺寸）', () => {
   win.localStorage.removeItem(mod.__test.LS_VIEW)
   const tree = render({ __testList: manyPlugins(12) })
-  const more = findFirst(tree, (n) => n.type === 'button' && n.children && String(n.children[0]).startsWith('▾'))
+  const more = findFirst(tree, (n) => n.type === 'button' && n.props && n.props['data-more'] === '1')
   more[0].props.onClick()
   const opened = rerender()
   const ranges = findFirst(opened, (n) => n.type === 'input' && n.props.type === 'range')
@@ -656,7 +658,7 @@ check('改大小会写进 localStorage（下次打开还是这个尺寸）', () 
 check('拖宽度滑块 → 方块真的变宽（端到端，不只是"存的能渲染"）', () => {
   win.localStorage.removeItem(mod.__test.LS_VIEW)
   const tree = render({ __testList: manyPlugins(12) })
-  const more = findFirst(tree, (n) => n.type === 'button' && n.children && String(n.children[0]).startsWith('▾'))
+  const more = findFirst(tree, (n) => n.type === 'button' && n.props && n.props['data-more'] === '1')
   eq(more.length, 1, '前提：有 +N')
   more[0].props.onClick()
   const opened = rerender()
@@ -675,7 +677,7 @@ check('拖宽度滑块 → 方块真的变宽（端到端，不只是"存的能�
 check('拖大小滑块 → 变高；原来是正方形时宽跟着走', () => {
   win.localStorage.removeItem(mod.__test.LS_VIEW)
   const tree = render({ __testList: manyPlugins(12) })
-  const more = findFirst(tree, (n) => n.type === 'button' && n.children && String(n.children[0]).startsWith('▾'))
+  const more = findFirst(tree, (n) => n.type === 'button' && n.props && n.props['data-more'] === '1')
   more[0].props.onClick()
   const opened = rerender()
   const ranges = findFirst(opened, (n) => n.type === 'input' && n.props.type === 'range')
@@ -700,7 +702,7 @@ check('Shift+滚轮：必须同时认 deltaX（Chromium 会把竖滚转成横滚
 
 check('抽屉的尺寸控件不许被长列表挤扁', () => {
   const tree = render({ __testList: manyPlugins(12) })
-  const more = findFirst(tree, (n) => n.type === 'button' && n.children && String(n.children[0]).startsWith('▾'))
+  const more = findFirst(tree, (n) => n.type === 'button' && n.props && n.props['data-more'] === '1')
   more[0].props.onClick()
   const opened = rerender()
   const controls = findFirst(
@@ -763,7 +765,7 @@ check('右键改名：输入名字并保存，POST 带上模块名', () => {
 check('抽屉里的行也能右键改名（不靠 ✎ 按钮了）', () => {
   win.localStorage.removeItem(mod.__test.LS_VIEW)
   const tree = render({ __testList: manyPlugins(12) })
-  const more = findFirst(tree, (n) => n.type === 'button' && n.children && String(n.children[0]).startsWith('▾'))
+  const more = findFirst(tree, (n) => n.type === 'button' && n.props && n.props['data-more'] === '1')
   more[0].props.onClick()
   const opened = rerender()
   // 抽屉行：title 是模块名、挂了 onContextMenu
@@ -778,29 +780,32 @@ check('抽屉里的行也能右键改名（不靠 ✎ 按钮了）', () => {
 check('展开键和方块用同一套配色，且三角要够大够亮', () => {
   const tree = render({ __testList: SAMPLE })
   const tile = tiles(tree)[0] // 开着的方块
-  const more = findFirst(tree, (n) => n.type === 'button' && n.children && String(n.children[0]).startsWith('▾'))[0]
+  const more = findFirst(tree, (n) => n.type === 'button' && n.props && n.props['data-more'] === '1')[0]
   ok(more !== undefined, '应当有展开键')
   // 2026-11-03 他说「这个图标也要和这些图标一样」——底色/边框/投影跟"开"的方块一致
   eq(more.props.style.background, tile.props.style.background, '底色要和方块一致')
   eq(more.props.style.border, tile.props.style.border, '边框要和方块一致')
   eq(more.props.style.boxShadow, tile.props.style.boxShadow, '投影要和方块一致')
-  // 后来又说「白色也太小了，别人不知道什么意思」——字色比状态色更亮，字号要够大
-  eq(more.props.style.color, '#ffffff', '三角要纯白（它是操作，不是状态）')
-  const size = more.props.style.height
-  ok(more.props.style.fontSize >= size * 0.5, `三角至少要是高度的一半：${more.props.style.fontSize}/${size}`)
+  // 后来又说「白色也太小了」「三角起码要占到 70% 区域」——现在用 SVG 按百分比给尺寸，
+  // 不依赖字体：换字号、换系统字体都不会缩水
+  const svgNode = more.children && more.children[0]
+  eq(svgNode && svgNode.type, 'svg', '三角要是 svg，不靠字体')
+  eq(svgNode.props.width, '70%', '宽度占 70%')
+  eq(svgNode.props.height, '70%', '高度占 70%')
+  eq(svgNode.children[0].props.fill, '#ffffff', '纯白')
   eq(more.props['aria-label'] !== undefined, true, '要有无障碍标签')
 })
 
 check('展开键常驻：不足 9 个时也在（否则打不开抽屉里的尺寸控件）', () => {
   const tree = render({ __testList: SAMPLE }) // 只有 3 个
-  const more = findFirst(tree, (n) => n.type === 'button' && n.children && String(n.children[0]).startsWith('▾'))
+  const more = findFirst(tree, (n) => n.type === 'button' && n.props && n.props['data-more'] === '1')
   eq(more.length, 1, '只有 3 个插件时也要有 ▾')
   ok(String(more[0].props.title).length > 0, 'title 要给一句说明')
 })
 
 check('空列表也保留展开键，并给一句说明', () => {
   const tree = render({ __testList: [] })
-  const more = findFirst(tree, (n) => n.type === 'button' && n.children && String(n.children[0]).startsWith('▾'))
+  const more = findFirst(tree, (n) => n.type === 'button' && n.props && n.props['data-more'] === '1')
   eq(more.length, 1, '空列表也要能开抽屉（尺寸控件在里面）')
   const hint = findFirst(tree, (n) => n.type === 'span' && String(n.children && n.children[0]).includes('插件开关'))
   eq(hint.length, 1, '说明还在')
@@ -809,7 +814,7 @@ check('空列表也保留展开键，并给一句说明', () => {
 check('抽屉里有「全部静音」，点了发 POST /mute', () => {
   nextList = { ok: true, plugins: manyPlugins(3), mute: { active: false, count: 0 } }
   const tree = render({ __testList: manyPlugins(3) })
-  const more = findFirst(tree, (n) => n.type === 'button' && n.children && String(n.children[0]).startsWith('▾'))
+  const more = findFirst(tree, (n) => n.type === 'button' && n.props && n.props['data-more'] === '1')
   more[0].props.onClick()
   const opened = rerender()
   const muteBtn = findFirst(opened, (n) => n.type === 'button' && n.children && String(n.children[0] || '').includes('全部静音'))
@@ -824,7 +829,7 @@ check('抽屉里有「全部静音」，点了发 POST /mute', () => {
 check('已经静音时按钮变成「恢复 N 个」，点了发 POST /unmute', () => {
   nextList = { ok: true, plugins: manyPlugins(3) }
   const tree = render({ __testList: manyPlugins(3), __testMute: { active: true, count: 7 } })
-  const more = findFirst(tree, (n) => n.type === 'button' && n.children && String(n.children[0]).startsWith('▾'))
+  const more = findFirst(tree, (n) => n.type === 'button' && n.props && n.props['data-more'] === '1')
   more[0].props.onClick()
   const opened = rerender()
   const restore = findFirst(opened, (n) => n.type === 'button' && n.children && String(n.children[0] || '').includes('恢复'))
