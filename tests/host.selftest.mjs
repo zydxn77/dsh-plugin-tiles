@@ -31,6 +31,7 @@ const {
   normalizeChange,
   applyCustomNames,
 } = mod
+import { openMute } from '../lib/mute.js'
 
 let pass = 0
 const failures = []
@@ -535,6 +536,120 @@ check('applyCustomNames：改名只影响显示，不动模块名', () => {
   const out = applyCustomNames([{ id: 'a', module: 'm', title: '原名', initial: '原' }], { m: '新名' })
   eq(out[0].module, 'm', '模块名不变（过滤还要靠它）')
   eq(out[0].title, '新名', '标题变')
+})
+
+// ————————————————————————————————————————————————————————————
+// 全部静音 / 恢复
+// ————————————————————————————————————————————————————————————
+
+/**
+ * 每个用例前清掉数据目录。
+ * 静音账本落在 `$DSH_HOME/plugin-tiles/mute.json`，而所有用例共用同一个临时 HOME ——
+ * 不清的话前一个用例的"已静音"会漏到下一个（第一版就是这么红的）。
+ */
+function clearData() {
+  fs.rmSync(path.join(DSH_HOME, 'plugin-tiles'), { recursive: true, force: true })
+}
+
+await checkAsync('POST /mute：关掉所有开着的（不含自己），并把名单记下来', async () => {
+  clearData()
+  const manager = makeFakeManager()
+  const { handler } = boot({ manager })
+  const r = await call(handler, 'POST', '/mute')
+  eq(r.status, 200, 'status')
+  eq(r.json.ok, true, 'ok')
+  eq(r.json.muted, true, '状态')
+  eq(r.json.application, 'restart-required', '要提醒重启')
+  // p-1、p-3 开着；p-3 是它自己，不许关；p-2 本来就关着，不用动
+  const disabled = manager.calls.filter((c) => c.enabled === false).map((c) => c.id)
+  eq(disabled, ['p-1'], '只关该关的')
+  ok(!disabled.includes('p-3'), '绝不能把自己关掉')
+  eq(r.json.count, 1, '计数')
+})
+
+await checkAsync('POST /mute 之后 /list 会报 muted，恢复后回填同样的那一批', async () => {
+  clearData()
+  const manager = makeFakeManager()
+  const { handler } = boot({ manager })
+  const before = await call(handler, 'GET', '/list')
+  eq(before.json.mute.active, false, '一开始没静音')
+
+  await call(handler, 'POST', '/mute')
+  const muted = await call(handler, 'GET', '/list')
+  eq(muted.json.mute.active, true, '静音之后')
+  eq(muted.json.mute.count, 1, '名单里 1 个')
+
+  manager.calls.length = 0
+  const back = await call(handler, 'POST', '/unmute')
+  eq(back.status, 200, 'status')
+  eq(back.json.muted, false, '状态')
+  eq(manager.calls, [{ id: 'p-1', enabled: true }], '只把名单里那个开回来')
+
+  const after = await call(handler, 'GET', '/list')
+  eq(after.json.mute.active, false, '恢复之后不再显示静音')
+})
+
+await checkAsync('POST /unmute：没静音过 → 400，不瞎开别人的插件', async () => {
+  clearData()
+  const manager = makeFakeManager()
+  const { handler } = boot({ manager })
+  const r = await call(handler, 'POST', '/unmute')
+  eq(r.status, 400, 'status')
+  eq(r.json.error, 'not-muted', '要说清原因')
+  eq(manager.calls, [], '一个都不许动')
+})
+
+await checkAsync('POST /mute：一个都没开着 → 400，不写空账本', async () => {
+  clearData()
+  const manager = makeFakeManager({
+    plugins: [
+      { entryId: 'p-1', moduleName: 'dsh-a', meta: { title: 'A' }, enabled: false },
+      { entryId: 'p-3', moduleName: 'dsh-plugin-tiles', meta: { title: '插件方块' }, enabled: true },
+    ],
+  })
+  const { handler } = boot({ manager })
+  const r = await call(handler, 'POST', '/mute')
+  eq(r.status, 400, 'status')
+  eq(r.json.error, 'nothing-to-mute', '原因')
+  eq(manager.calls, [], '自己那块也不许动')
+})
+
+await checkAsync('POST /unmute：名单里的插件已经被卸载 → 跳过，不报错也不卡住', async () => {
+  clearData()
+  const manager = makeFakeManager()
+  const { handler } = boot({ manager })
+  await call(handler, 'POST', '/mute')
+  // 模拟 p-1 被卸掉了
+  manager.listPlugins = async () => [
+    { entryId: 'p-2', moduleName: 'dsh-lingxi-companion', meta: { title: '灵溪' }, enabled: false },
+    { entryId: 'p-3', moduleName: 'dsh-plugin-tiles', meta: { title: '插件方块' }, enabled: true },
+  ]
+  manager.calls.length = 0
+  const r = await call(handler, 'POST', '/unmute')
+  eq(r.status, 200, 'status')
+  eq(r.json.count, 0, '没有能恢复的')
+  eq(r.json.missing, 1, '要报出跳过了几个')
+  eq(manager.calls, [], '不存在的 id 不去调')
+  const after = await call(handler, 'GET', '/list')
+  eq(after.json.mute.active, false, '账本要清掉，不能卡在恢复不了的状态')
+})
+
+check('mute 账本：坏文件当没静音；空名单也不许卡住', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tiles-mute-'))
+  try {
+    fs.writeFileSync(path.join(dir, 'mute.json'), '{坏 JSON', 'utf8')
+    eq(openMute(dir).read(), { active: false, ids: [] }, '坏 JSON')
+    fs.writeFileSync(path.join(dir, 'mute.json'), JSON.stringify({ active: true, ids: [] }), 'utf8')
+    eq(openMute(dir).read(), { active: false, ids: [] }, 'active 但没名单 = 没静音')
+    const book = openMute(dir)
+    book.write({ ids: ['a', 'a', ' b ', '', null, 3] })
+    eq(book.read().ids, ['a', 'b'], '去重、去空白、丢非字符串')
+    book.clear()
+    eq(book.read(), { active: false, ids: [] }, '清掉之后')
+    book.clear() // 再清一次不该抛
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 // ————————————————————————————————————————————————————————————

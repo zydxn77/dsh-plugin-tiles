@@ -138,6 +138,8 @@ const win = {
 
 /** 记下所有 fetch，用来验证点方块真的发了开关请求 */
 const fetchCalls = []
+/** 下一次 /list 的响应（用例可以改它，测「已静音」时的按钮文案） */
+let nextList = { ok: true, plugins: [] }
 const sandbox = {
   window: win,
   document: { addEventListener() {}, removeEventListener() {} },
@@ -148,7 +150,7 @@ const sandbox = {
   clearInterval: () => {},
   fetch: (url, opts) => {
     fetchCalls.push({ url: String(url), opts: opts || null })
-    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ok: true, plugins: [] }) })
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(nextList) })
   },
   Math,
   Date,
@@ -785,6 +787,37 @@ check('空列表也保留展开键，并给一句说明', () => {
   eq(more.length, 1, '空列表也要能开抽屉（尺寸控件在里面）')
   const hint = findFirst(tree, (n) => n.type === 'span' && String(n.children && n.children[0]).includes('插件开关'))
   eq(hint.length, 1, '说明还在')
+})
+
+check('抽屉里有「全部静音」，点了发 POST /mute', () => {
+  nextList = { ok: true, plugins: manyPlugins(3), mute: { active: false, count: 0 } }
+  const tree = render({ __testList: manyPlugins(3) })
+  const more = findFirst(tree, (n) => n.type === 'button' && n.children && n.children[0] === '▾')
+  more[0].props.onClick()
+  const opened = rerender()
+  const muteBtn = findFirst(opened, (n) => n.type === 'button' && n.children && String(n.children[0] || '').includes('全部静音'))
+  eq(muteBtn.length, 1, '应当有「全部静音」按钮')
+  fetchCalls.length = 0
+  muteBtn[0].props.onClick()
+  const posts = fetchCalls.filter((c) => c.opts && c.opts.method === 'POST')
+  eq(posts.length, 1, '应当发一次 POST')
+  eq(posts[0].url, '/.dsh-plugin-tiles/mute', '地址')
+})
+
+check('已经静音时按钮变成「恢复 N 个」，点了发 POST /unmute', () => {
+  nextList = { ok: true, plugins: manyPlugins(3) }
+  const tree = render({ __testList: manyPlugins(3), __testMute: { active: true, count: 7 } })
+  const more = findFirst(tree, (n) => n.type === 'button' && n.children && n.children[0] === '▾')
+  more[0].props.onClick()
+  const opened = rerender()
+  const restore = findFirst(opened, (n) => n.type === 'button' && n.children && String(n.children[0] || '').includes('恢复'))
+  eq(restore.length, 1, '应当有「恢复」按钮')
+  ok(String(restore[0].children[0]).includes('7'), `文案要带条数：${restore[0].children[0]}`)
+  fetchCalls.length = 0
+  restore[0].props.onClick()
+  const posts = fetchCalls.filter((c) => c.opts && c.opts.method === 'POST')
+  eq(posts.length, 1, '应当发一次 POST')
+  eq(posts[0].url, '/.dsh-plugin-tiles/unmute', '地址')
 })
 
 // ————————————————————————————————————————————————————————————
