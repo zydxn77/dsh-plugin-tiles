@@ -268,6 +268,10 @@ function makeFakeManager(options = {}) {
     },
     async setPluginEnabled(id, enabled) {
       calls.push({ id, enabled })
+      // 真 manager 会改状态，假件也照做 —— 否则"只恢复当前关着的"这类逻辑测不出真假
+      for (const item of plugins) {
+        if (item.entryId === id) item.enabled = enabled === true
+      }
       return { changed: true, application: 'applied', stage: 'enable', target: id, enabled }
     },
   }
@@ -327,7 +331,7 @@ function makeReq(method, pathname, body, headers) {
   return req
 }
 
-async function call(handler, method, pathname, body, headers) {
+async function call(handler, method, pathname, body, headers, remoteAddress) {
   const out = { status: 0, body: '' }
   const res = {
     writeHead(status) {
@@ -337,7 +341,10 @@ async function call(handler, method, pathname, body, headers) {
       out.body = String(chunk === undefined ? '' : chunk)
     },
   }
-  await handler(makeReq(method, pathname, body, headers), res)
+  const req = makeReq(method, pathname, body, headers)
+  // 真服务里 socket 一定在；这里按需塞一个假 socket 来验"内网地址被拒"
+  if (remoteAddress !== undefined) req.socket = { remoteAddress }
+  await handler(req, res)
   let json = null
   try {
     json = JSON.parse(out.body)
@@ -647,6 +654,82 @@ check('mute 账本：坏文件当没静音；空名单也不许卡住', () => {
     book.clear()
     eq(book.read(), { active: false, ids: [] }, '清掉之后')
     book.clear() // 再清一次不该抛
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+check('信任栅栏：内网来的请求直接 403，哪怕 Host 伪造成 127.0.0.1', async () => {
+  const { handler } = boot()
+  // Host 头是请求方能自填的，光看它等于没栅栏 —— 内核填的 remoteAddress 才是硬证据
+  const r = await call(handler, 'POST', '/mute', {}, { host: '127.0.0.1:13696' }, '192.168.1.9')
+  eq(r.status, 403, 'status')
+  eq(r.json.ok, false, 'ok')
+  // 回环地址照常放行（这里用 403 判定，说明前面的栅栏过了）
+  const okLocal = await call(handler, 'POST', '/mute', {}, { host: '127.0.0.1:13696' }, '::1')
+  ok(okLocal.status !== 403, `回环不该被拦：${okLocal.status}`)
+})
+
+await checkAsync('POST /mute：已经静音过 → 409，且**不覆盖**原名单', async () => {
+  clearData()
+  const manager = makeFakeManager()
+  const { handler } = boot({ manager })
+  const first = await call(handler, 'POST', '/mute')
+  eq(first.json.count, 1, '第一次静音 1 个')
+  const book = openMute(path.join(DSH_HOME, 'plugin-tiles'))
+  const savedIds = book.read().ids
+  // 期间用户自己开了别的插件，再点一次静音
+  manager.calls.length = 0
+  const second = await call(handler, 'POST', '/mute')
+  eq(second.status, 409, 'status')
+  eq(second.json.error, 'already-muted', '原因')
+  eq(manager.calls, [], '不许再动插件')
+  eq(book.read().ids, savedIds, '原名单必须原样保留')
+})
+
+await checkAsync('POST /mute：部分失败 → 失败的不进账本，免得恢复时去开它', async () => {
+  clearData()
+  const manager = makeFakeManager()
+  manager.setPluginEnabled = async (id, enabled) => {
+    manager.calls.push({ id, enabled })
+    if (id === 'p-1') throw new Error('store locked')
+    for (const item of manager.plugins || []) if (item.entryId === id) item.enabled = enabled === true
+    return { changed: true, application: 'applied', target: id, enabled }
+  }
+  const { handler } = boot({ manager })
+  const r = await call(handler, 'POST', '/mute')
+  eq(r.status, 200, 'status')
+  eq(r.json.count, 0, '一个都没关成')
+  eq(r.json.failed.length, 1, '要报出失败的')
+  eq(r.json.failed[0].id, 'p-1', '失败的是哪个')
+  const book = openMute(path.join(DSH_HOME, 'plugin-tiles'))
+  eq(book.read().active, false, '全失败就不该留下"已静音"的假状态')
+})
+
+await checkAsync('POST /unmute：全部恢复失败 → 409，账本保留，还能再试', async () => {
+  clearData()
+  const manager = makeFakeManager()
+  const { handler } = boot({ manager })
+  await call(handler, 'POST', '/mute')
+  manager.setPluginEnabled = async () => {
+    throw new Error('store locked')
+  }
+  const r = await call(handler, 'POST', '/unmute')
+  eq(r.status, 409, 'status')
+  eq(r.json.error, 'restore-failed', '原因')
+  const book = openMute(path.join(DSH_HOME, 'plugin-tiles'))
+  eq(book.read().active, true, '账本必须还在')
+  eq(book.read().ids, ['p-1'], '名单不能被清')
+})
+
+check('mute 账本：写的时候先落 .tmp 再 rename（不留半截 JSON）', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tiles-mute-atomic-'))
+  try {
+    const book = openMute(dir)
+    book.write({ ids: ['x'] })
+    eq(book.read().ids, ['x'], '读得回来')
+    const leftovers = fs.readdirSync(dir).filter((n) => n.endsWith('.tmp'))
+    eq(leftovers, [], '不该留下临时文件')
   } finally {
     fs.rmSync(dir, { recursive: true, force: true })
   }

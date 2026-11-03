@@ -49,7 +49,9 @@ dsh plugin add git+https://github.com/zydxn77/dsh-plugin-tiles.git
 `$DSH_HOME/plugin-tiles/mute.json`；再按一下（按钮变成「恢复 N 个」）只把名单里那些开回来。
 
 - **它自己不会被关**，所以这排方块静音之后还在；
+- **静音状态下再点静音会被拒**（409 `already-muted`）—— 再关一次会用新名单冲掉原名单，第一批就回不来了；
 - 静音后**已经失效的**插件（被卸载、id 变了）恢复时自动跳过，不会卡在"恢复不了"；
+- 恢复**全部失败**时账本会保留（409 `restore-failed`），你还能再点一次；
 - 改完的插件大多**要重启 DSH 才真生效**，按钮上会这么提示。
 
 ## 卸载
