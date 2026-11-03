@@ -2,6 +2,28 @@
 
 会话标题旁一排小方块：**一个方块 = 一个装过的插件**。
 
+## 安装
+
+依赖：DSH 0.2.1 及以上（`package.json` 里有 `dsh.bundle` 清单，所以能被 `dsh plugin add` 装）。
+
+```sh
+# 从 npm（推荐）
+dsh plugin add dsh-plugin-tiles
+
+# 或直接从 GitHub 的某个提交装（没发 npm 时用这条）
+dsh plugin add git+https://github.com/zydxn77/dsh-plugin-tiles.git
+```
+
+装完**重启 DSH** —— 客户端插件没有热重载。
+
+装在哪：profile 的 `node_modules` 里，`package.json` 的 `dsh.profile.bundles` 也要有 `dsh-plugin-tiles`，
+两处都在才算真的装上了。手工装（`link:` / junction）见文末「装在哪」。
+
+**要不要先开一个会话**：这个插件挂在 `conversation.session.header.actions` 槽位，
+就是「创造模式」「N 个子智能体」那一排的位置 —— 没有会话时那一排不存在，所以看不到。
+
+## 它长什么样
+
 - **标题栏只摆 9 块**（`INLINE_TILES`），第 10 个起收进抽屉；抽屉入口是一个**常驻的 `▾`**
   （不再显示 `+N`，也不再只在超出时才出现 —— 抽屉里还有尺寸控件，全滤空时也要能打开）；
 - 开 = **深色"键帽"**（竖向渐变 + 上沿内高光 + 细描边 + 极浅投影）；关 = 空心 + 虚线 + 更暗。
@@ -194,10 +216,28 @@ fatal: Could not read from remote repository.
 `git init` / `add` / `commit` / `log` 这些纯本地操作都正常，只有**过网的传输**会被拦。
 推的时候要放宽沙箱（`danger-full-access`）跑那一条 `git push`。
 
-客户端那 26 项里 **11 项是真渲染**（不是 grep 源码）：靠 `__testList` 往组件里
+客户端那 35 项里 **12 项是真渲染**（不是 grep 源码）：靠 `__testList` 往组件里
 塞假列表（只在 `window.__DESK_TEST__ === true` 时生效，生产走不到），
-然后断言方块数量、每块上的字、✓/× 角标、填色还是空心、宽高与字号、
-`+N` 截断、抽屉里是否列出全部、两个尺寸滑块的值、点方块是否真的 POST 了取反后的状态。
+然后断言方块数量、每块上的字、有没有角标、键帽还是空心、宽高与字号、
+`▾` 截断、抽屉里是否列出全部、两个尺寸滑块的值、右键改名、点方块是否真的 POST 了取反后的状态。
+
+## 投稿给社区市场
+
+`contrib/zydxn77__dsh-plugin-tiles.yml` 是要提交给
+[awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin) 的条目文件，
+放进那个仓库的 `data/plugins/` 再开 PR（规则见它的 `contributing.md`）。
+
+准入条件（2026-11-03 对着原文核过）：
+
+| 条件 | 本仓库 |
+|---|---|
+| 公开仓库 | ✅ `zydxn77/dsh-plugin-tiles` |
+| `package.json` 有 `dsh.bundle` | ✅ 只有 `dsh.client` 是被拒的最常见原因 |
+| 真实可用的代码 | ✅ `lib/` 三个文件 + 92 项自检 |
+| 仓库创建满 **1 天** | ⏳ 2026-11-03 建，第二天才能提 |
+| 仓库带 `dsh-plugin` topic | ✅ 已加 |
+| README 有安装说明 | ✅ 开头「安装」一节 |
+| 开源许可证（SPDX） | ✅ MIT（`LICENSE` + `package.json.license`） |
 
 ## 踩过的坑
 

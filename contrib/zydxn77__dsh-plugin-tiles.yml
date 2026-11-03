@@ -1,0 +1,25 @@
+# 这一份是投稿给 awesome-dsh-plugin 的条目文件。
+#
+# 用法：把本文件复制到那个仓库的 `data/plugins/` 下，
+# 文件名必须是 `<owner>__<repo>.yml`，也就是：
+#
+#     data/plugins/zydxn77__dsh-plugin-tiles.yml
+#
+# 一个 PR 只放这一个文件，别改它自动生成的 README。
+# 字段规则见 https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/blob/main/contributing.md
+#
+# ⚠️ 两个坑：
+#   1. `description.en` 是唯一必填项，且必须**以句号结尾**；
+#   2. 描述里含 `: `（冒号+空格）时**必须加引号**，否则 YAML 会当成嵌套键 —— 这里已经加了。
+
+url: https://github.com/zydxn77/dsh-plugin-tiles
+name: zydxn77/dsh-plugin-tiles
+category: ui
+description:
+  en: 'A row of tiles beside the session title: one tile per installed plugin, left-click to toggle it, right-click to rename it; the tile size and width are adjustable.'
+  zh: '会话标题旁一排方块：一个方块一个装过的插件，左键开关、右键改名，尺寸可调。'
+
+# icon 可选，但**必须是 GitHub 托管的位图**（png/jpg）。
+# 本仓库只有 icon.svg，所以这里先不写 —— 不写会回退到你 GitHub 的头像。
+# 以后要换成自己的图，放一张 180×180 的 png 进仓库，再取消下面这行的注释：
+# icon: https://raw.githubusercontent.com/zydxn77/dsh-plugin-tiles/main/icon.png
