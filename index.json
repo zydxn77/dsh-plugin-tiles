@@ -1,0 +1,42 @@
+{
+  "format": 1,
+  "title": {
+    "en": "Zydxn's DSH plugins",
+    "zh": "阿锦的 DSH 插件"
+  },
+  "description": {
+    "en": "Small add-ons for DeepSeek Harness.",
+    "zh": "DeepSeek Harness 的一些小附加件。"
+  },
+  "plugins": [
+    {
+      "name": "dsh-plugin-tiles",
+      "title": {
+        "en": "Plugin Tiles",
+        "zh": "插件方块"
+      },
+      "description": {
+        "en": "A row of small tiles beside the session title: one tile per installed plugin, click to enable or disable, right-click to rename.",
+        "zh": "会话标题旁一排小方块：一个方块一个装过的插件，左键开关、右键改名，尺寸可调。"
+      },
+      "icon": "icon.svg",
+      "author": "zydxn77",
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/zydxn77/dsh-plugin-tiles"
+      },
+      "versions": [
+        {
+          "version": "0.1.0",
+          "publishTimestamp": 1793714352,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5"
+          }
+        }
+      ]
+    }
+  ]
+}

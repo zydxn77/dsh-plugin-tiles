@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Plugin Tiles",
+    "description": "A row of small tiles beside the session title: one tile per installed plugin, lit means enabled, click to toggle. Turning it off removes the tiles, so it refuses to switch itself off."
+  }
+}
