@@ -786,12 +786,12 @@ check('展开键和方块用同一套配色，且三角要够大够亮', () => {
   eq(more.props.style.background, tile.props.style.background, '底色要和方块一致')
   eq(more.props.style.border, tile.props.style.border, '边框要和方块一致')
   eq(more.props.style.boxShadow, tile.props.style.boxShadow, '投影要和方块一致')
-  // 后来又说「白色也太小了」「三角起码要占到 70% 区域」——现在用 SVG 按百分比给尺寸，
+  // 后来又说「白色也太小了」「三角占 60%」——现在用 SVG 按百分比给尺寸，
   // 不依赖字体：换字号、换系统字体都不会缩水
   const svgNode = more.children && more.children[0]
   eq(svgNode && svgNode.type, 'svg', '三角要是 svg，不靠字体')
-  eq(svgNode.props.width, '70%', '宽度占 70%')
-  eq(svgNode.props.height, '70%', '高度占 70%')
+  eq(svgNode.props.width, '60%', '宽度占 60%')
+  eq(svgNode.props.height, '60%', '高度占 60%')
   eq(svgNode.children[0].props.fill, '#ffffff', '纯白')
   eq(more.props['aria-label'] !== undefined, true, '要有无障碍标签')
 })
