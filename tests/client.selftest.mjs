@@ -774,6 +774,18 @@ check('抽屉里的行也能右键改名（不靠 ✎ 按钮了）', () => {
   eq(pencils.length, 0, '不该再有 ✎ 按钮')
 })
 
+check('展开键和方块用同一套配色（别夹在中间像块空白）', () => {
+  const tree = render({ __testList: SAMPLE })
+  const tile = tiles(tree)[0] // 开着的方块
+  const more = findFirst(tree, (n) => n.type === 'button' && n.children && n.children[0] === '▾')[0]
+  ok(more !== undefined, '应当有展开键')
+  // 2026-11-03 他说「这个图标也要和这些图标一样」——底色/边框/字色/投影都跟"开"的方块一致
+  eq(more.props.style.background, tile.props.style.background, '底色要和方块一致')
+  eq(more.props.style.border, tile.props.style.border, '边框要和方块一致')
+  eq(more.props.style.color, tile.props.style.color, '字色要和方块一致')
+  eq(more.props.style.boxShadow, tile.props.style.boxShadow, '投影要和方块一致')
+})
+
 check('展开键常驻：不足 9 个时也在（否则打不开抽屉里的尺寸控件）', () => {
   const tree = render({ __testList: SAMPLE }) // 只有 3 个
   const more = findFirst(tree, (n) => n.type === 'button' && n.children && n.children[0] === '▾')
