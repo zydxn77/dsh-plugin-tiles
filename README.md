@@ -16,8 +16,6 @@ dsh plugin add dsh-plugin-tiles
 dsh plugin add git+https://github.com/zydxn77/dsh-plugin-tiles.git
 ```
 
-装完**重启 DSH** —— 客户端插件没有热重载。然后**开一个会话**：这排长在会话标题栏上，
-没有会话就没有那一栏，也就看不到它。
 
 ## 使用
 
@@ -31,38 +29,12 @@ dsh plugin add git+https://github.com/zydxn77/dsh-plugin-tiles.git
 | `Shift` + 滚轮 | 调长短（宽度 12–96） |
 | 悬停 | 看完整名字、包名、当前状态 |
 
-- 标题栏只摆 **9 块**，其余收进 `▾` 抽屉；
-- **开** = 深色键帽（渐变 + 高光 + 细边），**关** = 空心 + 虚线 + 更暗；
-- 方块上写整名，放不下用省略号；
-- 尺寸和名字都记得住：尺寸存浏览器（`localStorage`），名字存宿主
-  （`$DSH_HOME/plugin-tiles/names.json`），换浏览器不丢。
-
-## 它不显示什么
-
-- **DSH 自带的插件** —— 那些不该在这排里开关；
-- **改不了的条目**（`readOnlyReason` 非空）—— 点了也没用；
-- **它自己**不能关自己（关掉这排就没了），要关请走「设置 → 插件」。
-
-## 全部静音
-
-抽屉右上角那颗按钮。按一下：关掉**所有开着的**第三方插件，同时把"当时开着哪些"记进
-`$DSH_HOME/plugin-tiles/mute.json`；再按一下（按钮变成「恢复 N 个」）只把名单里那些开回来。
-
-- **它自己不会被关**，所以这排方块静音之后还在；
-- **静音状态下再点静音会被拒**（409 `already-muted`）—— 再关一次会用新名单冲掉原名单，第一批就回不来了；
-- 静音后**已经失效的**插件（被卸载、id 变了）恢复时自动跳过，不会卡在"恢复不了"；
-- 恢复**全部失败**时账本会保留（409 `restore-failed`），你还能再点一次；
-- 改完的插件大多**要重启 DSH 才真生效**，按钮上会这么提示。
 
 ## 卸载
 
 ```sh
 dsh plugin remove dsh-plugin-tiles
 ```
-
-有两处**不会自动清**，介意就手动删：浏览器 `localStorage` 的 `dsh-plugin-tiles:view`（尺寸），
-以及宿主侧的 `$DSH_HOME/plugin-tiles/names.json`（你起的名字）。
-两者都是**读坏了就退回默认**，留着也不会出事。
 
 ## 开发
 
@@ -73,7 +45,6 @@ node tests/host.selftest.mjs      # 33 项：路由 + 过滤 + 自关拦截
 node tests/client.selftest.mjs    # 35 项：真渲染
 ```
 
-判断依据、踩过的坑、发布到市场的流程，都在 [docs/NOTES.md](docs/NOTES.md)。
 
 ## 许可
 
