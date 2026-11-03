@@ -42,6 +42,16 @@ dsh plugin add git+https://github.com/zydxn77/dsh-plugin-tiles.git
 - **改不了的条目**（`readOnlyReason` 非空）—— 点了也没用；
 - **它自己**不能关自己（关掉这排就没了），要关请走「设置 → 插件」。
 
+## 卸载
+
+```sh
+dsh plugin remove dsh-plugin-tiles
+```
+
+有两处**不会自动清**，介意就手动删：浏览器 `localStorage` 的 `dsh-plugin-tiles:view`（尺寸），
+以及宿主侧的 `$DSH_HOME/plugin-tiles/names.json`（你起的名字）。
+两者都是**读坏了就退回默认**，留着也不会出事。
+
 ## 开发
 
 ```sh
