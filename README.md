@@ -97,6 +97,8 @@ bundle 那道判据现在只当第二道兜底。
 
 ## 发到插件市场
 
+仓库：<https://github.com/zydxn77/dsh-plugin-tiles>（公开）。
+
 DSH 的「插件市场」不是中央服务器 —— `@deepseek-ai/dsh-plugin-market` 读的是**你配的一组 HTTP 索引 URL**。
 所以发布 = ①发 npm 包 ②写一份索引 JSON 放 HTTPS 上 ③启用市场、把索引 URL 配进去。
 
@@ -178,6 +180,19 @@ node tests\client.selftest.mjs    # 35 项：槽位、hook 顺序、9 块上限�
 - 把展开键改回「只在超出 9 个时才显示」→ 报「只有 3 个插件时也要有 ▾」；
 - 把"开"的底色换回饱和琥珀 → 报「开应当是质感渐变：rgb(232,178,58)」；
 - 把 `publishTimestamp` 写成毫秒 → 报「越界（要 Unix 秒）」。
+
+## 推 GitHub 的一个坑
+
+`git push`（SSH 传输）在受限沙箱里会直接崩：
+
+```
+ssh.exe: *** fatal error - couldn't create signal pipe, Win32 error 5
+fatal: Could not read from remote repository.
+```
+
+**不是权限问题，也不是仓库不存在** —— 是 MSYS 的 `ssh.exe` 建不了那张信号管道。
+`git init` / `add` / `commit` / `log` 这些纯本地操作都正常，只有**过网的传输**会被拦。
+推的时候要放宽沙箱（`danger-full-access`）跑那一条 `git push`。
 
 客户端那 26 项里 **11 项是真渲染**（不是 grep 源码）：靠 `__testList` 往组件里
 塞假列表（只在 `window.__DESK_TEST__ === true` 时生效，生产走不到），
