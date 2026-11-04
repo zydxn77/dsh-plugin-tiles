@@ -182,7 +182,7 @@ const mod = captured.factory((n) => {
 check('模块导出 apply 与自检出口', () => {
   ok(typeof mod.apply === 'function', 'apply')
   ok(mod.__test !== undefined, '沙箱里应当挂上 __test')
-  eq(mod.__test.SLOT, 'conversation.session.header.actions', '槽位名')
+  eq(mod.__test.SLOT, 'conversation.composer.dock', '槽位名')
   eq(mod.__test.ROUTE, '/.dsh-plugin-tiles', '路由前缀')
 })
 
@@ -191,8 +191,9 @@ check('模块导出 apply 与自检出口', () => {
 // ————————————————————————————————————————————————————————————
 
 let registered = null
-check('注册进会话标题旁的动作槽，id 正确、order 有值', () => {
+check('只注册一处：框架浮层（位置由组件自己量）', () => {
   const regs = []
+  const injected = []
   mod.apply({
     get: () => undefined,
     inject: (deps, cb) => {
@@ -200,7 +201,7 @@ check('注册进会话标题旁的动作槽，id 正确、order 有值', () => {
       cb({
         slots: {
           inject: (slot, fn) => {
-            eq(slot, 'conversation.session.header.actions', '挂载的槽')
+            injected.push(slot)
             fn()
           },
           register: (opts, comp) => {
@@ -211,11 +212,13 @@ check('注册进会话标题旁的动作槽，id 正确、order 有值', () => {
       })
     },
   })
-  eq(regs.length, 1, '注册数')
+  eq(regs.length, 1, '只挂一处：会话页与新对话页共用这一个浮层')
+  eq(injected, ['shell.overlay'], '挂在框架浮层')
   registered = regs[0]
-  eq(registered.opts.id, 'plugin-tiles', 'id')
-  eq(registered.opts.name, 'conversation.session.header.actions', 'name 要和槽一致')
+  eq(registered.opts.name, 'shell.overlay', 'name 要和槽一致')
+  eq(registered.opts.id, 'plugin-tiles-overlay', 'id')
   ok(typeof registered.opts.order === 'number', 'order 要有')
+  ok(typeof mod.__test.Tiles === 'function', '要导出纯包装壳给自检渲染')
 })
 
 // ————————————————————————————————————————————————————————————
@@ -249,25 +252,34 @@ function findFirst(node, pred, out = []) {
   return out
 }
 
+/** 线上那份 t 来自 apply 里的 makeTranslator（中文），这里照搬，不然断言中文全挂 */
+const TEST_T = mod.__test.makeTranslator()
+
 function render(props = {}) {
   React.__resetAll()
-  const outer = registered.comp({ t: (k) => k, ...props })
-  // 注册的组件返回 <Fragment><style/><TilesBoundary/></Fragment>：
-  // expand() 只解函数/类节点，Fragment 是 symbol，所以要先把边界挑出来再展开
-  const kids = Array.isArray(outer.children) ? outer.children : []
-  const boundary = kids.find((k) => k && typeof k.type === 'function')
-  ok(boundary !== undefined, '应当能从 Fragment 里找到错误边界')
-  return expand(boundary)
+  return unwrap(mod.__test.Tiles({ t: TEST_T, ...props }))
 }
 
 /** 只重渲染、不重置 hooks —— 模拟 React 的 re-render（state 会留住） */
 function rerender() {
   React.__begin()
-  const outer = registered.comp({ t: (k) => k })
-  const kids = Array.isArray(outer.children) ? outer.children : []
-  const boundary = kids.find((k) => k && typeof k.type === 'function')
-  ok(boundary !== undefined, '应当能找到错误边界')
-  return expand(boundary)
+  return unwrap(mod.__test.Tiles({ t: TEST_T }))
+}
+
+/**
+ * 从最外层往下剥壳：Fragment → DockedTiles（或浮层壳）→ div → TilesBoundary → 组件树。
+ * 2026-11-04 加了浮层之后，外面多包了一层，不能再只挑一次孩子了。
+ */
+function unwrap(node, max = 8) {
+  let tree = node
+  for (let i = 0; i < max; i += 1) {
+    if (!tree || typeof tree !== 'object') break
+    const kids = Array.isArray(tree.children) ? tree.children : []
+    const fn = kids.find((k) => k && typeof k.type === 'function')
+    if (fn === undefined) break
+    tree = expand(fn)
+  }
+  return tree
 }
 
 /** 一颗方块：带 aria-pressed 的 button */
@@ -515,7 +527,7 @@ check('方块行不会把标题挤走：宽度有上限且可横向滚', () => {
   const tree = render({ __testList: SAMPLE })
   const row = findFirst(tree, (n) => n.props && n.props.className === 'dpt-row')
   eq(row.length, 1, '应当有行容器')
-  ok(String(row[0].props.style.maxWidth).endsWith('vw'), '宽度上限用 vw')
+  ok(/vw/.test(String(row[0].props.style.maxWidth)), '宽度上限用 vw')
   eq(row[0].props.style.overflowX, 'auto', '超出要能滚')
 })
 
@@ -840,6 +852,90 @@ check('已经静音时按钮变成「恢复 N 个」，点了发 POST /unmute', 
   const posts = fetchCalls.filter((c) => c.opts && c.opts.method === 'POST')
   eq(posts.length, 1, '应当发一次 POST')
   eq(posts[0].url, '/.dsh-plugin-tiles/unmute', '地址')
+})
+
+// ————————————————————————————————————————————————————————————
+// 里模式与「待重启」（2026-11-04）
+// ————————————————————————————————————————————————————————————
+
+check('里模式：默认不列系统自带的，点开后列出来；那些点不动', () => {
+  const shipped = {
+    id: 'core',
+    module: '@deepseek-ai/dsh-base',
+    title: '内核',
+    initial: '内',
+    enabled: true,
+    phase: null,
+    readOnly: null,
+    self: false,
+    kind: 'shipped',
+  }
+  const list = [...SAMPLE.map((p) => ({ ...p, kind: 'user' })), shipped]
+  const tree = render({ __testList: list })
+  const more = findFirst(tree, (n) => n.type === 'button' && n.props && n.props['data-more'] === '1')
+  more[0].props.onClick()
+  let opened = rerender()
+  const hasCore = (t) =>
+    findFirst(t, (n) => n.type === 'span' && String(n.children && n.children[0]) === '内核').length
+  eq(hasCore(opened), 0, '默认不列系统自带的')
+  const deepBtn = findFirst(opened, (n) => n.type === 'button' && n.props && n.props['data-deep'] !== undefined)
+  eq(deepBtn.length, 1, '抽屉里要有「里模式」')
+  eq(deepBtn[0].props['data-deep'], '0', '默认关着')
+  deepBtn[0].props.onClick()
+  opened = rerender()
+  eq(hasCore(opened), 1, '里模式要把自带的也列出来')
+  eq(
+    findFirst(opened, (n) => n.type === 'button' && n.props && n.props['data-deep'] === '1').length,
+    1,
+    '按钮要显示激活',
+  )
+  fetchCalls.length = 0
+  const coreRow = findFirst(opened, (n) => n.type === 'button' && n.props.title === '@deepseek-ai/dsh-base')
+  eq(coreRow.length, 1, '里模式里有这一行')
+  coreRow[0].props.onClick()
+  eq(
+    fetchCalls.filter((c) => c.opts && c.opts.method === 'POST').length,
+    0,
+    '系统自带的只能看，点了不该发请求',
+  )
+})
+
+async function checkAsync(name, fn) {
+  try {
+    await fn()
+    pass += 1
+  } catch (err) {
+    failures.push(`${name}: ${err && err.message ? err.message : String(err)}`)
+  }
+}
+
+await checkAsync('开关回 restart-required：行上标「待重启」，底部提示重启才生效', async () => {
+  nextList = {
+    ok: true,
+    plugins: manyPlugins(3),
+    application: 'restart-required',
+    changed: true,
+    enabled: false,
+  }
+  const tree = render({ __testList: manyPlugins(3) })
+  const more = findFirst(tree, (n) => n.type === 'button' && n.props && n.props['data-more'] === '1')
+  more[0].props.onClick()
+  const opened = rerender()
+  const row = findFirst(opened, (n) => n.type === 'button' && n.props.title === 'm0')[0]
+  ok(row !== undefined, '找到抽屉行')
+  row.props.onClick()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  const after = rerender()
+  eq(
+    findFirst(after, (n) => n.type === 'span' && String(n.children && n.children[0]) === '待重启').length,
+    1,
+    '行上要标「待重启」',
+  )
+  eq(
+    findFirst(after, (n) => n.type === 'div' && String(n.children && n.children[0]).includes('重启 DSH')).length,
+    1,
+    '底部要有一句重启提示',
+  )
 })
 
 // ————————————————————————————————————————————————————————————

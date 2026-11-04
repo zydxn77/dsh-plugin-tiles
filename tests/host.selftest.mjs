@@ -321,6 +321,9 @@ function makeReq(method, pathname, body, headers) {
     method,
     url: `${ROUTE}${pathname}`,
     headers: headers === undefined ? { ...LOOPBACK } : headers,
+    // 真服务里 socket 一定有；这里补上 —— 信任栅栏现在是 fail-closed，
+    // 缺 socket 会被当成"来源不明"直接拒
+    socket: { remoteAddress: '127.0.0.1' },
   }
   if (body !== undefined) {
     const payload = Buffer.from(JSON.stringify(body), 'utf8')
@@ -396,6 +399,42 @@ await checkAsync('GET /list：缓存生效，连着问两次只读一次', async
   await call(handler, 'GET', '/list')
   await call(handler, 'GET', '/list')
   eq(reads, 1, '第二次应当命中缓存')
+})
+
+await checkAsync('GET /list?all=1：里模式给全量，每条带 kind', async () => {
+  const { handler } = boot()
+  const r = await call(handler, 'GET', '/list?all=1')
+  eq(r.status, 200, 'status')
+  eq(r.json.mode, 'all', 'mode')
+  eq(r.json.plugins.length, 4, '一条都不该滤（含内核）')
+  const byId = new Map(r.json.plugins.map((p) => [p.id, p]))
+  eq(byId.get('core-1').kind, 'shipped', '内核条目标 shipped')
+  eq(byId.get('p-1').kind, 'user', '他装的标 user')
+  eq(byId.get('p-1').title, '小鲸鱼交互台', '中文标题照旧')
+  eq(byId.get('p-3').self, true, '自己那条仍然标 self')
+})
+
+await checkAsync('GET /list：里模式与默认各存一档缓存，互不污染', async () => {
+  const { handler } = boot()
+  const normal = await call(handler, 'GET', '/list')
+  const all = await call(handler, 'GET', '/list?all=1')
+  const normal2 = await call(handler, 'GET', '/list')
+  eq(normal.json.plugins.length, 3, '默认 3 条')
+  eq(all.json.plugins.length, 4, '里模式 4 条')
+  eq(normal2.json.plugins.length, 3, '再读默认，不该拿到里模式那份')
+})
+
+await checkAsync('POST /toggle：系统自带的不许从这里关（fail-closed）', async () => {
+  const { handler, manager } = boot()
+  const r = await call(handler, 'POST', '/toggle', { id: 'core-1', enabled: false })
+  eq(r.status, 400, 'status')
+  eq(r.json.error, 'shipped-refused', 'error')
+  eq(manager.calls.length, 0, '不该真的打到 pluginManager')
+  // 2026-11-04 glm 复核：上一版守卫全在 enabled === false 分支里，传 true 就绕过去
+  const r2 = await call(handler, 'POST', '/toggle', { id: 'core-1', enabled: true })
+  eq(r2.status, 400, '启用也不能从这儿走')
+  eq(r2.json.error, 'shipped-refused', 'error')
+  eq(manager.calls.length, 0, '仍然不该打到服务')
 })
 
 await checkAsync('POST /toggle：把开关交给 pluginManager，原样带回结果', async () => {
@@ -659,7 +698,7 @@ check('mute 账本：坏文件当没静音；空名单也不许卡住', () => {
   }
 })
 
-check('信任栅栏：内网来的请求直接 403，哪怕 Host 伪造成 127.0.0.1', async () => {
+await checkAsync('信任栅栏：内网来的请求直接 403，哪怕 Host 伪造成 127.0.0.1', async () => {
   const { handler } = boot()
   // Host 头是请求方能自填的，光看它等于没栅栏 —— 内核填的 remoteAddress 才是硬证据
   const r = await call(handler, 'POST', '/mute', {}, { host: '127.0.0.1:13696' }, '192.168.1.9')

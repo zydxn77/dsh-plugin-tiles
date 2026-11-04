@@ -23,8 +23,78 @@ dsh plugin add git+https://github.com/zydxn77/dsh-plugin-tiles.git
 装在哪：profile 的 `node_modules` 里，`package.json` 的 `dsh.profile.bundles` 也要有 `dsh-plugin-tiles`，
 两处都在才算真的装上了。手工装（`link:` / junction）见文末「装在哪」。
 
-**要不要先开一个会话**：这个插件挂在 `conversation.session.header.actions` 槽位，
-就是「创造模式」「N 个子智能体」那一排的位置 —— 没有会话时那一排不存在，所以看不到。
+**最终方案（2026-11-04）**：**只挂 `shell.overlay` 一处**，位置全靠量。
+
+- 会话里：贴在「对话 / 轨迹 / 上下文 / 编队」那一栏（`[data-conversation-tabs]` 的父级）右侧空白；
+- 新对话页：那一栏整行不存在，贴输入框卡片下沿、同宽居中。
+
+为什么不挂槽：DSH 没给标签行留座位（`conversation.session.header.views.actions` 是「⋯」**菜单里的行**，
+不是标签行本身）；标题行（`header.actions`）又跟「创造模式 / N 个子智能体」挤成一坨。
+
+> 位置的来回（2026-11-04，一天改了五轮，记下来免得再猜）：
+> ① 一开始挂在 `conversation.session.header.actions`（标题旁）；
+> ② 他说「可以放在下面的部分」→ 挪到 `conversation.composer.dock`（输入框卡片下方）；
+> ③ 他指着一张「对话 / 轨迹 / 上下文 / 编队」的标签栏截图说「放到这上面」→ 试过标题行，新对话页用浮层；
+> ④ 标题行跟「创造模式 / N 个子智能体」挤成一坨 → 两处都回输入框下面；
+> ⑤ 他说「我说的是放这一栏」→ 指着标签栏本身。**那一栏没有槽位**，于是改成单浮层 + 量位置：
+>    会话页贴标签栏右侧、新对话页贴输入框下沿。到此才算定。
+
+## 为什么是浮层、不是槽位
+
+三个座位都试过了：
+
+| 座位 | 问题 |
+|---|---|
+| `conversation.session.header.actions` | 跟「创造模式 / N 个子智能体」挤成一坨，标题被压扁 |
+| `conversation.composer.dock` | 只能放输入框**下面**，放不到标签栏；且 hero 不渲染 |
+| `conversation.session.header.views.actions` | 名字像标签行，其实是「⋯」**菜单里的行**，不是那一栏 |
+
+源码里标签行是：
+
+```jsx
+<div className={tabs}>
+  <div data-conversation-tabs>…tabs…</div>
+  {hasEntryActions && <ViewsMoreMenu renderSlot …/>}
+</div>
+```
+
+**没有任何 renderSlot 落在这一行里**。所以只剩浮层 + 量位置。
+
+`shell.overlay` 是 `position:absolute; inset:0; z-index:20; pointer-events:none`，
+子元素要自己 `pointer-events:auto`（已加）。
+
+测量要点：
+
+- 会话页：`[data-conversation-tabs]` 的父级那一行，`fixed` + `bottom/right` 贴行内右侧；
+- 新对话页：量 InputBar 根（`[data-composer-dock]` 的父级），贴**卡片下沿**；
+- ⚠️ **不能直接量 `[data-composer-dock]`**：hero 时它是空的，而 InputBar 的 CSS 写着
+  `.hero .dock:empty { display:none }` —— 元素在 DOM 里，但 rect 全是 0（第一版就摆到了左上角、宽 0）。
+- ⚠️ **不能拿 InputBar 根的 rect 当卡片**：根左右各有 `--dsh-composer-side-clearance` 内边距，
+  会宽一圈、往左偏。用 `paddingLeft` 内缩回来。
+- `ResizeObserver` + `resize`/`scroll` + `MutationObserver`（含 `attributes`）重算。
+
+⚠️ 2026-11-04 13:34 翻过车：曾拿「可见对话区有没有 `data-conversation-session`」当判据，
+新对话页整排被判没了。那个属性在 hero 页的真实形态没验证过，别再当主判据。
+
+## 里模式（2026-11-04）
+
+他要「把软件的插件全部显示出来」。实现分两半：
+
+- **宿主**：`GET /list?all=1` 走 `selectInstalled(..., { all: true })` —— 不过滤 shipped / readonly，
+  每条加 `kind`：`shipped`（安装包自带）/ `readonly`（加载器不给改）/ `user`（他装的）。
+  两档列表**分开缓存**，混用会把里模式的结果当成默认的。
+- **客户端**：抽屉里一颗「里模式」开关；打开后抽屉摆全量，但 shipped / readonly / 自己那行**禁点**。
+
+**为什么 shipped 只读**：关掉内核条目，DSH 下次可能直接起不来。所以宿主侧 `POST /toggle`
+对 `kind === 'shipped'` 一律 400 `shipped-refused`（fail-closed，判不出来也拒）——
+"看得见"不等于"能关"。
+
+## 「待重启」标记
+
+宿主回 `application === 'restart-required'` 的条目，行尾标 `待重启`，抽屉底部写
+「有 N 项改过了，重启 DSH 才真正生效」。`pending` 只活在当前这一屏，重启后自然清空。
+
+这就是他说的"在加载前就选好"的可见形态：改动先排队，下次启动按配置加载。
 
 ## 它长什么样
 
@@ -70,8 +140,8 @@ entryId 是加载器条的 id（`include:xxx`），重装或改 patch 会变；�
 
 ## 它长在哪
 
-槽位：`conversation.session.header.actions` —— 就是「创造模式」「N 个子智能体」
-那一排的位置，紧挨着会话标题。所以**要先开一个会话**才看得见。
+槽位：**只有 `shell.overlay`**（框架浮层）。会话页贴标签栏右侧、新对话页贴输入框下沿
+（见上文「为什么是浮层、不是槽位」）。
 
 ## 它改的是什么
 
@@ -189,11 +259,11 @@ install_bundle @deepseek-ai/dsh-plugin-market@0.2.1-rc.5
 ```powershell
 node tests\index.selftest.mjs     # 14 项：市场索引格式 1 的规则（校验器镜像）
 node tests\names.selftest.mjs     # 10 项：自定义名字的清洗 / 落盘 / 套用
-node tests\host.selftest.mjs      # 33 项：路由 + 过滤（availability / 只读）+ 排序 + 自关拦截 + 改名 + 信任栅栏
-node tests\client.selftest.mjs    # 35 项：槽位、hook 顺序、9 块上限、抽屉、尺寸、右键改名、真渲染
+node tests\host.selftest.mjs      # 47 项：路由 + 过滤（availability / 只读）+ 里模式 + 排序 + 自关/自带拦截 + 改名 + 信任栅栏
+node tests\client.selftest.mjs    # 40 项：槽位、hook 顺序、9 块上限、抽屉、里模式、待重启、尺寸、右键改名、真渲染
 ```
 
-共 **92 项**。验过不是空的：
+共 **111 项**。验过不是空的：
 
 - 把「开=实线 / 关=虚线」改成永远实线 → 报「关应当是虚线」；
 - 把 `INLINE_TILES` 从 9 改成 12 → 报「他定的是 9 个，实际 12」；
@@ -220,7 +290,7 @@ fatal: Could not read from remote repository.
 `git init` / `add` / `commit` / `log` 这些纯本地操作都正常，只有**过网的传输**会被拦。
 推的时候要放宽沙箱（`danger-full-access`）跑那一条 `git push`。
 
-客户端那 35 项里 **12 项是真渲染**（不是 grep 源码）：靠 `__testList` 往组件里
+客户端那 40 项里 **12 项是真渲染**（不是 grep 源码）：靠 `__testList` 往组件里
 塞假列表（只在 `window.__DESK_TEST__ === true` 时生效，生产走不到），
 然后断言方块数量、每块上的字、有没有角标、键帽还是空心、宽高与字号、
 `▾` 截断、抽屉里是否列出全部、两个尺寸滑块的值、右键改名、点方块是否真的 POST 了取反后的状态。
@@ -237,7 +307,7 @@ fatal: Could not read from remote repository.
 |---|---|
 | 公开仓库 | ✅ `zydxn77/dsh-plugin-tiles` |
 | `package.json` 有 `dsh.bundle` | ✅ 只有 `dsh.client` 是被拒的最常见原因 |
-| 真实可用的代码 | ✅ `lib/` 三个文件 + 92 项自检 |
+| 真实可用的代码 | ✅ `lib/` 三个文件 + 111 项自检 |
 | 仓库创建满 **1 天** | ⏳ 2026-11-03 建，第二天才能提 |
 | 仓库带 `dsh-plugin` topic | ✅ 已加 |
 | README 有安装说明 | ✅ 开头「安装」一节 |
