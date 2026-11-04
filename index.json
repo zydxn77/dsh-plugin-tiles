@@ -16,8 +16,8 @@
         "zh": "插件方块"
       },
       "description": {
-        "en": "A row of small tiles beside the session title: one tile per installed plugin, click to enable or disable, right-click to rename.",
-        "zh": "会话标题旁一排小方块：一个方块一个装过的插件，左键开关、右键改名，尺寸可调。"
+        "en": "A row of small tiles: one tile per installed plugin — left-click to toggle, right-click to rename, adjustable size. Includes a full-list mode and restart-pending markers.",
+        "zh": "一排小方块：一个方块一个装过的插件，左键开关、右键改名、尺寸可调。带全量清单与「待重启」标记。"
       },
       "icon": "icon.svg",
       "author": "zydxn77",

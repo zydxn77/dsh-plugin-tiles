@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-tiles",
   "version": "0.1.0",
-  "description": "会话标题旁一排小方块：一个方块 = 一个装过的插件，点亮表示启用，点一下开关。",
+  "description": "一排小方块：一个方块 = 一个装过的插件，左键开关、右键改名，尺寸可调。附全量清单与待重启标记。",
   "keywords": ["dsh", "dsh-plugin", "deepseek-harness", "plugin-manager", "toggle"],
   "author": "zydxn77",
   "repository": {
